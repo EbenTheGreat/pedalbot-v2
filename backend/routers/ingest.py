@@ -24,7 +24,7 @@ from backend.db.models import (
     dict_to_document,
 )
 
-from backend.workers.celery_app import app
+from backend.services.ingestion_service import process_manual_inline
 
 
 from backend.services.pdf_processor import PdfProcessor, validate_pdf, get_pdf_file_size
@@ -443,6 +443,7 @@ def _extract_pedal_name_from_filename(filename: str) -> str:
 async def upload_manual(
     pdf_file: UploadFile = File(..., description="PDF manual file"),
     db: AsyncIOMotorDatabase = Depends(get_database),
+    background_tasks: BackgroundTasks = None,
 ):
     """
     Upload a pedal manual PDF.
@@ -499,8 +500,6 @@ async def upload_manual(
         logger.info(f"Uploaded PDF: {filename} ({file_size} bytes) to {local_pdf_path}")
         
         # IMPORTANT: Store only the filename in MongoDB, not full path!
-        # The worker will construct the correct path based on its environment
-        # This solves the "Windows path in Docker" bug
         
         # Extract manufacturer from filename (first attempt)
         manufacturer = _extract_manufacturer_from_filename(filename)
@@ -510,9 +509,9 @@ async def upload_manual(
         # Create manual document
         manual = ManualDocument(
             pedal_name=pedal_name,
-            manufacturer=manufacturer,  # Extracted from filename, may be None
+            manufacturer=manufacturer,
             pdf_url=filename,  # Store ONLY filename, not full path
-            pinecone_namespace=namespace,  # Will be updated by worker with actual UUID
+            pinecone_namespace=namespace,
             status=ManualStatus.PENDING,
             file_size_bytes=file_size,
         )
@@ -520,8 +519,8 @@ async def upload_manual(
         # Insert to MongoDB
         await db.manuals.insert_one(document_to_dict(manual))
 
-        # Automatically trigger processing
-        app.send_task("ingest_manual", args=[manual.manual_id])
+        # Trigger inline background processing (no Celery/Redis needed)
+        background_tasks.add_task(process_manual_inline, manual.manual_id)
 
         logger.info(f"Manual created and processing started: {manual.manual_id} ({pedal_name})")
 
@@ -542,7 +541,8 @@ async def upload_manual(
 
 @router.post("/process", response_model=ProcessManualResponse)
 async def process_manual(manual_id: str,
-                        db: AsyncIOMotorDatabase= Depends(get_database)):
+                        db: AsyncIOMotorDatabase= Depends(get_database),
+                        background_tasks: BackgroundTasks = None):
     """
     Start processing a manual (PDF → chunks → Pinecone).
     
@@ -577,11 +577,8 @@ async def process_manual(manual_id: str,
         {"$set": {"status": ManualStatus.PROCESSING.value}}
     )
 
-    # Trigger Background Tasks
-    app.send_task(
-    "ingest_manual",
-    args=[manual_id]
-    )
+    # Trigger inline background processing (no Celery/Redis needed)
+    background_tasks.add_task(process_manual_inline, manual_id)
 
     logger.info(f"Processing started: {manual_id} (job: {job.job_id})")
     

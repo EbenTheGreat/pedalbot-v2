@@ -3,7 +3,7 @@
 # Docs: https://render.com/docs/blueprint-spec
 
 services:
-  # FastAPI Backend
+  # FastAPI Backend (includes inline ingestion via BackgroundTasks)
   - type: web
     name: pedalbot-api
     runtime: docker
@@ -33,18 +33,6 @@ services:
       - key: JWT_SECRET_KEY
         generateValue: true
       
-      # Redis (from Render Redis service)
-      - key: REDIS_URI
-        fromService:
-          type: redis
-          name: pedalbot-redis
-          property: connectionString
-      - key: CELERY_BROKER_URL
-        fromService:
-          type: redis
-          name: pedalbot-redis
-          property: connectionString
-      
       # Google Vision OCR (base64 encoded JSON)
       - key: GOOGLE_VISION_CREDENTIALS
         sync: false
@@ -63,39 +51,7 @@ services:
       - key: DEBUG
         value: "false"
 
-  # Celery Worker (background tasks)
-  - type: worker
-    name: pedalbot-worker
-    runtime: docker
-    dockerfilePath: ./Dockerfile.celery
-    plan: free
-    envVars:
-      - key: MONGODB_URI
-        sync: false
-      - key: PINECONE_API_KEY
-        sync: false
-      - key: VOYAGEAI_API_KEY
-        sync: false
-      - key: GROQ_API_KEY
-        sync: false
-      - key: GOOGLE_VISION_CREDENTIALS
-        sync: false
-      - key: REDIS_URI
-        fromService:
-          type: redis
-          name: pedalbot-redis
-          property: connectionString
-      - key: CELERY_BROKER_URL
-        fromService:
-          type: redis
-          name: pedalbot-redis
-          property: connectionString
-      - key: ENV
-        value: production
-
-  # Redis (message broker)
-  - type: redis
-    name: pedalbot-redis
-    plan: free  # 25MB, good for dev
-    maxmemoryPolicy: noeviction
-    ipAllowList: []  # Allow all Render internal connections
+  # NOTE: Redis and Celery worker removed for free-tier deployment.
+  # Ingestion now runs inline via FastAPI BackgroundTasks.
+  # To re-enable Celery for heavier workloads, upgrade to Starter ($7/mo)
+  # and add back the worker + Redis services.
