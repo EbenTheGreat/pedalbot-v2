@@ -1,0 +1,64 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+
+# Environment files (NEVER commit to public repos!)
+.env
+.env.*
+!.env.example
+
+# Credentials (NEVER commit!)
+google-vision-credentials.json
+*-credentials.json
+*.pem
+*.key
+
+# Uploaded files (user data)
+uploads/
+uploads_dir/
+backend/uploads/
+
+# Celery
+celerybeat-schedule
+celerybeat-schedule.*
+celerybeat.pid
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+*.tmp
+*.temp
+nul
+
+# JSON traces (may contain sensitive data)
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+
+# Lock files (optional - some prefer to commit these)
+# uv.lock

@@ -1,0 +1,100 @@
+# Render Blueprint
+# Deploy with: render.yaml in repo root
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # FastAPI Backend
+  - type: web
+    name: pedalbot-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free  # Change to 'starter' for production
+    healthCheckPath: /health
+    envVars:
+      # MongoDB Atlas
+      - key: MONGODB_URI
+        sync: false  # Set manually in dashboard
+      - key: MONGODB_DB_NAME
+        value: pedalbot_db
+      
+      # Vector Database
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_INDEX_NAME
+        value: pedalbot
+      
+      # LLM APIs
+      - key: GROQ_API_KEY
+        sync: false
+      - key: VOYAGEAI_API_KEY
+        sync: false
+      
+      # Authentication
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      
+      # Redis (from Render Redis service)
+      - key: REDIS_URI
+        fromService:
+          type: redis
+          name: pedalbot-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: pedalbot-redis
+          property: connectionString
+      
+      # Google Vision OCR (base64 encoded JSON)
+      - key: GOOGLE_VISION_CREDENTIALS
+        sync: false
+      
+      # Optional
+      - key: REVERB_API_KEY
+        sync: false
+      - key: LANGSMITH_API_KEY
+        sync: false
+      - key: LANGSMITH_PROJECT
+        value: pedalbot-prod
+      
+      # Environment
+      - key: ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+
+  # Celery Worker (background tasks)
+  - type: worker
+    name: pedalbot-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile.celery
+    plan: free
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: VOYAGEAI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GOOGLE_VISION_CREDENTIALS
+        sync: false
+      - key: REDIS_URI
+        fromService:
+          type: redis
+          name: pedalbot-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: pedalbot-redis
+          property: connectionString
+      - key: ENV
+        value: production
+
+  # Redis (message broker)
+  - type: redis
+    name: pedalbot-redis
+    plan: free  # 25MB, good for dev
+    maxmemoryPolicy: noeviction

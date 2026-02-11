@@ -1,0 +1,126 @@
+services:
+  # Redis - Message broker and result backend for Celery
+  redis:
+    image: redis:7-alpine
+    container_name: pedalbot-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # MongoDB - Local database for development
+  mongodb:
+    image: mongo:7
+    container_name: pedalbot-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Mongo Express - Web-based MongoDB admin interface (uncomment when needed)
+  # mongo-express:
+  #   image: mongo-express:latest
+  #   container_name: pedalbot-mongo-express
+  #   ports:
+  #     - "8081:8081"
+  #   environment:
+  #     - ME_CONFIG_MONGODB_SERVER=mongodb
+  #     - ME_CONFIG_MONGODB_PORT=27017
+  #     - ME_CONFIG_BASICAUTH_USERNAME=admin
+  #     - ME_CONFIG_BASICAUTH_PASSWORD=pedalbot123
+  #   depends_on:
+  #     mongodb:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+
+  # Celery Worker - Processes background tasks
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.celery
+    container_name: pedalbot-celery-worker
+    command: celery -A backend.workers.celery_app worker --loglevel=info --concurrency=4 -Q default,ingestion,pricing,notifications
+    volumes:
+      - ./uploads_dir:/app/uploads_dir # Only mount uploads directory
+      - ./google-vision-credentials.json:/app/google-vision-credentials.json:ro  # Mount Vision API credentials
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8 # Google DNS
+      - 1.1.1.1 # Cloudflare DNS
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - REDIS_URI=redis://redis:6379/0
+      - MONGODB_URI=mongodb://mongodb:27017/pedalbot_db
+      - GOOGLE_VISION_CREDENTIALS_PATH=/app/google-vision-credentials.json
+
+  # Celery Beat - Scheduler for periodic tasks
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.celery
+    container_name: pedalbot-celery-beat
+    command: celery -A backend.workers.celery_app beat --loglevel=info
+    # No volume mounts needed for beat scheduler
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8 # Google DNS
+      - 1.1.1.1 # Cloudflare DNS
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - REDIS_URI=redis://redis:6379/0
+      - MONGODB_URI=mongodb://mongodb:27017/pedalbot_db
+
+  # Flower - Celery monitoring dashboard (optional)
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile.celery
+    container_name: pedalbot-flower
+    command: celery -A backend.workers.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8 # Google DNS
+      - 1.1.1.1 # Cloudflare DNS
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+
+volumes:
+  redis_data:
+    driver: local
+  mongodb_data:
+    driver: local

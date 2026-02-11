@@ -1,0 +1,45 @@
+# Core Framework
+langchain
+langgraph
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+streamlit
+
+# Database
+pinecone
+pymongo[srv]
+motor
+certifi
+redis
+
+# AI/ML
+voyageai
+groq
+langchain_groq
+
+# PDF Processing
+PyMuPDF
+google-cloud-vision
+
+# Background Tasks
+celery[redis]
+flower
+
+# Email
+resend
+
+# Authentication
+pyjwt
+passlib[bcrypt]
+
+# HTTP
+httpx
+requests
+
+# Utilities
+python-dotenv
+python-multipart
+email-validator
+aiofiles

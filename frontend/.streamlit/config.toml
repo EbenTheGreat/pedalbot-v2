@@ -1,0 +1,15 @@
+[theme]
+# ChatGPT-inspired dark theme
+primaryColor = "#10a37f"
+backgroundColor = "#343541"
+secondaryBackgroundColor = "#444654"
+textColor = "#ececf1"
+font = "sans serif"
+
+[server]
+headless = true
+port = 8501
+enableCORS = false
+
+[browser]
+gatherUsageStats = false
