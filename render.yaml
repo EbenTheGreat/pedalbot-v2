@@ -98,3 +98,4 @@ services:
     name: pedalbot-redis
     plan: free  # 25MB, good for dev
     maxmemoryPolicy: noeviction
+    ipAllowList: []  # Allow all Render internal connections
