@@ -1,0 +1,13 @@
+# Railway Deployment Configuration
+# This config applies to the FastAPI web service.
+# Celery worker is deployed as a separate service in the same project.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
