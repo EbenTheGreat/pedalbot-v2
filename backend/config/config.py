@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8501"]
 
     # DATABASE - MongoDB
-    MONGODB_URI: str = Field(..., alias="MONGODB_URI_PRODUCTION")
+    MONGODB_URI: str = Field(default="")
     MONGODB_DB_NAME: str = "pedalbot_db"
     MONGODB_MAX_POOL_SIZE: int = 30
     MONGODB_MIN_POOL_SIZE: int = 5
