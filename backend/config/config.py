@@ -45,8 +45,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8501"]
 
     # DATABASE - MongoDB
-    MONGODB_URI: str = Field(default="", alias="MONGODB_URI")
-    MONGODB_URI_PRODUCTION: Optional[str] = Field(default=None, alias="MONGODB_URI_PRODUCTION")
+    MONGODB_URI: str = Field(default="")
     MONGODB_DB_NAME: str = "pedalbot_db"
     MONGODB_MAX_POOL_SIZE: int = 30
     MONGODB_MIN_POOL_SIZE: int = 5
@@ -165,34 +164,11 @@ class Settings(BaseSettings):
     @property
     def mongodb_url(self) -> str:
         """
-        Construct full MongoDB URI with fallback logic.
-        
-        Prioritizes MONGODB_URI_PRODUCTION if set, otherwise MONGODB_URI.
-        Ensures empty strings are treated as None.
+        Get the MongoDB URI from environment or settings.
         """
-        # Try both names from environment first
-        uri_prod = _os.environ.get("MONGODB_URI_PRODUCTION")
-        uri_main = _os.environ.get("MONGODB_URI")
-        
-        # Also check model fields (which might come from .env files)
-        model_prod = self.MONGODB_URI_PRODUCTION
-        model_main = self.MONGODB_URI
-        
-        # Decision sequence:
-        # 1. Non-empty PRODUCTION from env
-        if uri_prod and len(uri_prod.strip()) > 0:
-            return uri_prod
-        # 2. Non-empty MAIN from env
-        if uri_main and len(uri_main.strip()) > 0:
-            return uri_main
-        # 3. Non-empty PRODUCTION from model (.env)
-        if model_prod and len(model_prod.strip()) > 0:
-            return model_prod
-        # 4. Non-empty MAIN from model (.env)
-        if model_main and len(model_main.strip()) > 0:
-            return model_main
-            
-        return ""
+        # Prioritize os.environ over pydantic field to ensure Railway vars win
+        uri = _os.environ.get("MONGODB_URI") or self.MONGODB_URI
+        return uri.strip() if uri else ""
     
     @property
     def is_production(self) -> bool:
@@ -233,9 +209,16 @@ def get_settings() -> Settings:
 
 # Debug: Check if env var is actually set before pydantic reads it
 import os as _os
-_mongo_env = _os.environ.get("MONGODB_URI", "NOT_SET")
-print(f"[ENV DEBUG] MONGODB_URI from os.environ: '{_mongo_env[:30]}...' (len={len(_mongo_env)})")
-print(f"[ENV DEBUG] All env vars with MONGO: {[k for k in _os.environ.keys() if 'MONGO' in k]}")
+_mongo_env = _os.environ.get("MONGODB_URI")
+if _mongo_env is None:
+    _status = "MISSING (None)"
+elif len(_mongo_env.strip()) == 0:
+    _status = "EMPTY STRING"
+else:
+    _status = f"PRESENT ('{_mongo_env[:5]}...')"
+
+print(f"[ENV DEBUG] MONGODB_URI status: {_status} (len={len(_mongo_env) if _mongo_env else 0})")
+print(f"[ENV DEBUG] MONGO-related keys in os.environ: {[k for k in _os.environ.keys() if 'MONGO' in k]}")
 
 # Singleton instance for convenience
 settings = get_settings() 

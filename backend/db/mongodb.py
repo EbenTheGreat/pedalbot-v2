@@ -52,8 +52,11 @@ class MongoDB:
             server_selection_timeout_ms: Timeout for server selection
         """
         try:
+            if not uri or len(uri.strip()) == 0:
+                raise ValueError("MongoDB URI is empty! Check your MONGODB_URI environment variable.")
+            
             # DEBUG: Print the actual URI being used
-            print(f"[DEBUG] MONGODB URI BEING USED: {uri[:60]}...")
+            print(f"[DEBUG] MONGODB URI BEING USED: {uri[:10]}... (len={len(uri)})")
             
             # Detect if this is a local MongoDB (no SSL needed)
             is_local = "localhost" in uri or "127.0.0.1" in uri or "mongodb://" in uri and "mongodb.net" not in uri
