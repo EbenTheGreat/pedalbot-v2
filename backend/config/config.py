@@ -11,7 +11,7 @@ Usage:
 """
 
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import Optional, Dict, Any
 from functools import lru_cache
 from dotenv import load_dotenv
@@ -24,6 +24,14 @@ load_dotenv()
 
 class Settings(BaseSettings):
     """Application settings from environment variables."""
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def strip_whitespace(cls, v: Any, info: Any) -> Any:
+        """Strip whitespace from all string fields to prevent newline bugs."""
+        if isinstance(v, str):
+            return v.strip()
+        return v
 
     model_config = {
     "env_file": ".env",
