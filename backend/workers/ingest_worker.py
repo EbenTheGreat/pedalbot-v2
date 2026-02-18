@@ -165,7 +165,7 @@ def process_manual_task(self: Task, manual_id: str) -> dict:
         
         # Initialize MongoDB FIRST - before any task logic
         await MongoDB.connect(
-            uri=settings.MONGODB_URI,
+            uri=settings.mongodb_url,
             db_name=settings.MONGODB_DB_NAME
         )
         
@@ -522,7 +522,7 @@ async def _cleanup_old_jobs_async() -> dict:
     from backend.db.mongodb import MongoDB
 
     await MongoDB.connect(
-        uri=settings.MONGODB_URI,
+        uri=settings.mongodb_url,
         db_name=settings.MONGODB_DB_NAME
     )
 

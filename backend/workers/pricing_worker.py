@@ -31,7 +31,7 @@ def refresh_pricing_task(pedal_name: str) -> dict:
 
         # 🔑 Initialize MongoDB FIRST
         await MongoDB.connect(
-            uri=settings.MONGODB_URI,
+            uri=settings.mongodb_url,
             db_name=settings.MONGODB_DB_NAME
         )
 
@@ -131,7 +131,7 @@ async def _refresh_all_pricing_async() -> dict:
     from celery import group, signature
 
     await MongoDB.connect(
-        uri=settings.MONGODB_URI,
+        uri=settings.mongodb_url,
         db_name=settings.MONGODB_DB_NAME
     )
 

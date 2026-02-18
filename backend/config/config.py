@@ -164,13 +164,35 @@ class Settings(BaseSettings):
 
     @property
     def mongodb_url(self) -> str:
-        """Construct full MongoDB URI if needed."""
-        # Prioritize PRODUCTION alias if set, then the main field
-        uri = _os.environ.get("MONGODB_URI_PRODUCTION") or _os.environ.get("MONGODB_URI") or self.MONGODB_URI
-        if not uri or len(uri.strip()) == 0:
-             # Last ditch effort: check the PRODUCTION variable specifically
-             uri = self.MONGODB_URI_PRODUCTION or ""
-        return uri
+        """
+        Construct full MongoDB URI with fallback logic.
+        
+        Prioritizes MONGODB_URI_PRODUCTION if set, otherwise MONGODB_URI.
+        Ensures empty strings are treated as None.
+        """
+        # Try both names from environment first
+        uri_prod = _os.environ.get("MONGODB_URI_PRODUCTION")
+        uri_main = _os.environ.get("MONGODB_URI")
+        
+        # Also check model fields (which might come from .env files)
+        model_prod = self.MONGODB_URI_PRODUCTION
+        model_main = self.MONGODB_URI
+        
+        # Decision sequence:
+        # 1. Non-empty PRODUCTION from env
+        if uri_prod and len(uri_prod.strip()) > 0:
+            return uri_prod
+        # 2. Non-empty MAIN from env
+        if uri_main and len(uri_main.strip()) > 0:
+            return uri_main
+        # 3. Non-empty PRODUCTION from model (.env)
+        if model_prod and len(model_prod.strip()) > 0:
+            return model_prod
+        # 4. Non-empty MAIN from model (.env)
+        if model_main and len(model_main.strip()) > 0:
+            return model_main
+            
+        return ""
     
     @property
     def is_production(self) -> bool:

@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
     """Handle startup and shutdown events."""
     # Startup
     await MongoDB.connect(
-        uri=settings.MONGODB_URI,
+        uri=settings.mongodb_url,
         db_name=settings.MONGODB_DB_NAME
     )
     yield
