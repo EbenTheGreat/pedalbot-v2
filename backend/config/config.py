@@ -45,7 +45,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8501"]
 
     # DATABASE - MongoDB
-    MONGODB_URI: str = Field(default="")
+    MONGODB_URI: str = Field(default="", alias="MONGODB_URI")
+    MONGODB_URI_PRODUCTION: Optional[str] = Field(default=None, alias="MONGODB_URI_PRODUCTION")
     MONGODB_DB_NAME: str = "pedalbot_db"
     MONGODB_MAX_POOL_SIZE: int = 30
     MONGODB_MIN_POOL_SIZE: int = 5
@@ -164,7 +165,12 @@ class Settings(BaseSettings):
     @property
     def mongodb_url(self) -> str:
         """Construct full MongoDB URI if needed."""
-        return self.MONGODB_URI
+        # Prioritize PRODUCTION alias if set, then the main field
+        uri = _os.environ.get("MONGODB_URI_PRODUCTION") or _os.environ.get("MONGODB_URI") or self.MONGODB_URI
+        if not uri or len(uri.strip()) == 0:
+             # Last ditch effort: check the PRODUCTION variable specifically
+             uri = self.MONGODB_URI_PRODUCTION or ""
+        return uri
     
     @property
     def is_production(self) -> bool:
