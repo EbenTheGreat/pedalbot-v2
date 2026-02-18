@@ -203,6 +203,12 @@ def get_settings() -> Settings:
     """
     return Settings()
 
+# Debug: Check if env var is actually set before pydantic reads it
+import os as _os
+_mongo_env = _os.environ.get("MONGODB_URI", "NOT_SET")
+print(f"[ENV DEBUG] MONGODB_URI from os.environ: '{_mongo_env[:30]}...' (len={len(_mongo_env)})")
+print(f"[ENV DEBUG] All env vars with MONGO: {[k for k in _os.environ.keys() if 'MONGO' in k]}")
+
 # Singleton instance for convenience
 settings = get_settings() 
 
