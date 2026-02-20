@@ -28,9 +28,10 @@ class Settings(BaseSettings):
     @field_validator("*", mode="before")
     @classmethod
     def strip_whitespace(cls, v: Any, info: Any) -> Any:
-        """Strip whitespace from all string fields to prevent newline bugs."""
+        """Strip whitespace and convert empty strings to None."""
         if isinstance(v, str):
-            return v.strip()
+            stripped = v.strip()
+            return stripped if stripped else None
         return v
 
     model_config = {
