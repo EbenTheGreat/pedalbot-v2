@@ -292,7 +292,10 @@ def get_settings() -> Settings:
 
 
 # Debug: Check critical environment variables
-if os.environ.get("DEBUG_ENV", "false").lower() == "true" or os.environ.get("ENV") == "production":
+_env = os.environ.get("ENV", "development").lower()
+_debug_env = os.environ.get("DEBUG_ENV", "false").lower() == "true"
+
+if _env == "production" or _debug_env:
     _mongo_env = os.environ.get("MONGODB_URI")
     if _mongo_env is None:
         _status = "MISSING (None)"
@@ -301,11 +304,13 @@ if os.environ.get("DEBUG_ENV", "false").lower() == "true" or os.environ.get("ENV
     else:
         _status = f"PRESENT (starts with '{_mongo_env[:5]}...')"
     
+    print(f"[ENV DEBUG] ENV: {_env}")
     print(f"[ENV DEBUG] MONGODB_URI status: {_status} (len={len(_mongo_env) if _mongo_env else 0})")
     
-    _redis_env = os.environ.get("REDIS_URL") or os.environ.get("REDIS_URI")
-    _r_status = "PRESENT" if _redis_env else "MISSING"
-    print(f"[ENV DEBUG] REDIS status: {_r_status}")
+    _redis_url = os.environ.get("REDIS_URL")
+    _redis_uri = os.environ.get("REDIS_URI")
+    print(f"[ENV DEBUG] REDIS_URL: {'PRESENT' if _redis_url else 'MISSING'}")
+    print(f"[ENV DEBUG] REDIS_URI: {'PRESENT' if _redis_uri else 'MISSING'}")
 
 # Singleton instance for convenience
 settings = get_settings()
@@ -314,6 +319,9 @@ settings = get_settings()
 if settings.is_production:
     try:
         settings.validate_production_settings()
+        print("[ENV DEBUG] Production settings validated successfully.")
     except ValueError as e:
         print(f"\n!!! CONFIGURATION ERROR !!!\n{e}\n")
-        # In Docker/Render, failing here is good as it shows in logs immediately
+        # In Docker/Render, exiting here forces a restart/fail which is visible
+        import sys
+        sys.exit(1)

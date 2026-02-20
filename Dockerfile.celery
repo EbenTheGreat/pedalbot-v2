@@ -28,6 +28,7 @@ RUN mkdir -p /app/uploads_dir
 # Set Python path
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
+ENV ENV=production
 
 # Default command (can be overridden in docker-compose)
 CMD ["celery", "-A", "backend.workers.celery_app", "worker", "--loglevel=info"]
