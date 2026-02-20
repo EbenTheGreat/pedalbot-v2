@@ -2,38 +2,44 @@
 # Deploy with: render.yaml in repo root
 # Docs: https://render.com/docs/blueprint-spec
 
+# Environment Groups share variables across services
+envVarGroups:
+  - name: pedalbot-secrets
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB_NAME
+        value: pedalbot_db
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_INDEX_NAME
+        value: pedalbot
+      - key: GROQ_API_KEY
+        sync: false
+      - key: VOYAGEAI_API_KEY
+        sync: false
+      - key: GOOGLE_VISION_CREDENTIALS
+        sync: false
+      - key: REVERB_API_KEY
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+
 services:
   # FastAPI Backend
   - type: web
     name: pedalbot-api
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: free  # Change to 'starter' for production
+    plan: free
     healthCheckPath: /health
+    envVarGroups:
+      - name: pedalbot-secrets
     envVars:
-      # MongoDB Atlas
-      - key: MONGODB_URI
-        sync: false  # Set manually in dashboard
-      - key: MONGODB_DB_NAME
-        value: pedalbot_db
-      
-      # Vector Database
-      - key: PINECONE_API_KEY
-        sync: false
-      - key: PINECONE_INDEX_NAME
-        value: pedalbot
-      
-      # LLM APIs
-      - key: GROQ_API_KEY
-        sync: false
-      - key: VOYAGEAI_API_KEY
-        sync: false
-      
-      # Authentication
-      - key: JWT_SECRET_KEY
-        generateValue: true
-      
-      # Redis (from Render Redis service)
       - key: REDIS_URI
         fromService:
           type: redis
@@ -44,24 +50,10 @@ services:
           type: redis
           name: pedalbot-redis
           property: connectionString
-      
-      # Google Vision OCR (base64 encoded JSON)
-      - key: GOOGLE_VISION_CREDENTIALS
-        sync: false
-      
-      # Optional
-      - key: REVERB_API_KEY
-        sync: false
       - key: LANGSMITH_API_KEY
         sync: false
       - key: LANGSMITH_PROJECT
         value: pedalbot-prod
-      
-      # Environment
-      - key: ENV
-        value: production
-      - key: DEBUG
-        value: "false"
 
   # Celery Worker (background tasks)
   - type: worker
@@ -69,17 +61,9 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile.celery
     plan: free
+    envVarGroups:
+      - name: pedalbot-secrets
     envVars:
-      - key: MONGODB_URI
-        sync: false
-      - key: PINECONE_API_KEY
-        sync: false
-      - key: VOYAGEAI_API_KEY
-        sync: false
-      - key: GROQ_API_KEY
-        sync: false
-      - key: GOOGLE_VISION_CREDENTIALS
-        sync: false
       - key: REDIS_URI
         fromService:
           type: redis
@@ -90,12 +74,10 @@ services:
           type: redis
           name: pedalbot-redis
           property: connectionString
-      - key: ENV
-        value: production
 
   # Redis (message broker)
   - type: redis
     name: pedalbot-redis
-    plan: free  # 25MB, good for dev
+    plan: free
     maxmemoryPolicy: noeviction
-    ipAllowList: []  # Allow all Render internal connections
+    ipAllowList: []

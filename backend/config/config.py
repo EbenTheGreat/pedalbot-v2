@@ -10,16 +10,17 @@ Usage:
     print(settings.OPENAI_API_KEY)
 """
 
+import os
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator
 from typing import Optional, Dict, Any
 from functools import lru_cache
-from dotenv import load_dotenv
-import os
 
-# CRITICAL: Load .env file explicitly before Settings initialization
-# This ensures environment variables are available when Pydantic reads them
-load_dotenv()
+# Load .env file explicitly if not already in production or if file exists
+# In production environments like Render/Railway, vars are usually injected directly
+if os.path.exists(".env") and os.environ.get("ENV", "development").lower() != "production":
+    load_dotenv(override=False) 
 
 
 class Settings(BaseSettings):
@@ -28,10 +29,9 @@ class Settings(BaseSettings):
     @field_validator("*", mode="before")
     @classmethod
     def strip_whitespace(cls, v: Any, info: Any) -> Any:
-        """Strip whitespace and convert empty strings to None."""
+        """Strip whitespace from strings."""
         if isinstance(v, str):
-            stripped = v.strip()
-            return stripped if stripped else None
+            return v.strip()
         return v
 
     model_config = {
@@ -174,12 +174,38 @@ class Settings(BaseSettings):
 
     @property
     def mongodb_url(self) -> str:
-        """
-        Get the MongoDB URI from environment or settings.
-        """
-        # Prioritize os.environ over pydantic field to ensure Railway vars win
+        """Get the MongoDB URI from environment or settings."""
+        # Prioritize os.environ over pydantic field to ensure Platform (Render/Railway) vars win
         uri = os.environ.get("MONGODB_URI") or self.MONGODB_URI
-        return uri.strip() if uri else ""
+        if not uri:
+            return ""
+        return uri.strip()
+    
+    def validate_production_settings(self):
+        """
+        Validate that all required settings are present for production.
+        Raises ValueError if critical settings are missing.
+        """
+        if not self.is_production:
+            return
+
+        required_vars = {
+            "MONGODB_URI": self.mongodb_url,
+            "PINECONE_API_KEY": self.PINECONE_API_KEY,
+            "GROQ_API_KEY": self.GROQ_API_KEY,
+            "VOYAGEAI_API_KEY": self.VOYAGEAI_API_KEY,
+            "REDIS_URL": self.redis_url
+        }
+
+        missing = [k for k, v in required_vars.items() if not v]
+        
+        if missing:
+            error_msg = f"CRITICAL: Missing required environment variables for PRODUCTION: {', '.join(missing)}"
+            import logging
+            logging.error(error_msg)
+            # We don't raise here to prevent boot loop if we want to debug, 
+            # but we log it clearly. Actually, it's better to fail fast in production.
+            raise ValueError(error_msg)
     
     @property
     def is_production(self) -> bool:
@@ -215,31 +241,32 @@ class Settings(BaseSettings):
     def get_celery_broker_url(self) -> Optional[str]:
         """Get Celery broker URL with strict environment priority."""
         import os
-        # Absolute priority: Railway's REDIS_URL
-        if os.environ.get("REDIS_URL"):
-            return os.environ["REDIS_URL"].strip()
-            
-        # Second priority: Explicit CELERY_BROKER_URL (if not localhost in production)
+        
+        # 1. Explicit priority if provided and valid
         if self.CELERY_BROKER_URL:
-            # If we are in production but broker is localhost, ignore it and try redis_url
-            if self.is_production and "localhost" in self.CELERY_BROKER_URL:
-                return self.redis_url
-            return self.CELERY_BROKER_URL
+            if not (self.is_production and "localhost" in self.CELERY_BROKER_URL):
+                return self.CELERY_BROKER_URL
+                
+        # 2. Environment (Railway/Render) priority
+        env_redis = os.environ.get("REDIS_URL") or os.environ.get("REDIS_URI")
+        if env_redis:
+            return env_redis.strip()
             
         return self.redis_url
     
     def get_celery_backend(self) -> Optional[str]:
         """Get Celery result backend with strict environment priority."""
         import os
-        # Absolute priority: Railway's REDIS_URL
-        if os.environ.get("REDIS_URL"):
-            return os.environ["REDIS_URL"].strip()
-            
-        # Second priority: Explicit CELERY_RESULT_BACKEND
+        
+        # 1. Explicit priority
         if self.CELERY_RESULT_BACKEND:
-            if self.is_production and "localhost" in self.CELERY_RESULT_BACKEND:
-                return self.redis_url
-            return self.CELERY_RESULT_BACKEND
+            if not (self.is_production and "localhost" in self.CELERY_RESULT_BACKEND):
+                return self.CELERY_RESULT_BACKEND
+                
+        # 2. Environment priority
+        env_redis = os.environ.get("REDIS_URL") or os.environ.get("REDIS_URI")
+        if env_redis:
+            return env_redis.strip()
             
         return self.redis_url
     
@@ -264,17 +291,29 @@ def get_settings() -> Settings:
 
 
 
-# Debug: Check if env var is actually set before pydantic reads it
-_mongo_env = os.environ.get("MONGODB_URI")
-if _mongo_env is None:
-    _status = "MISSING (None)"
-elif len(_mongo_env.strip()) == 0:
-    _status = "EMPTY STRING"
-else:
-    _status = f"PRESENT ('{_mongo_env[:5]}...')"
-
-print(f"[ENV DEBUG] MONGODB_URI status: {_status} (len={len(_mongo_env) if _mongo_env else 0})")
-print(f"[ENV DEBUG] MONGO-related keys in os.environ: {[k for k in os.environ.keys() if 'MONGO' in k]}")
+# Debug: Check critical environment variables
+if os.environ.get("DEBUG_ENV", "false").lower() == "true" or os.environ.get("ENV") == "production":
+    _mongo_env = os.environ.get("MONGODB_URI")
+    if _mongo_env is None:
+        _status = "MISSING (None)"
+    elif len(_mongo_env.strip()) == 0:
+        _status = "EMPTY STRING"
+    else:
+        _status = f"PRESENT (starts with '{_mongo_env[:5]}...')"
+    
+    print(f"[ENV DEBUG] MONGODB_URI status: {_status} (len={len(_mongo_env) if _mongo_env else 0})")
+    
+    _redis_env = os.environ.get("REDIS_URL") or os.environ.get("REDIS_URI")
+    _r_status = "PRESENT" if _redis_env else "MISSING"
+    print(f"[ENV DEBUG] REDIS status: {_r_status}")
 
 # Singleton instance for convenience
 settings = get_settings()
+
+# Validate if in production
+if settings.is_production:
+    try:
+        settings.validate_production_settings()
+    except ValueError as e:
+        print(f"\n!!! CONFIGURATION ERROR !!!\n{e}\n")
+        # In Docker/Render, failing here is good as it shows in logs immediately
