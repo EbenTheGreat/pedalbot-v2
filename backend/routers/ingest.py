@@ -593,6 +593,47 @@ async def process_manual(manual_id: str,
     )
 
 
+@router.post("/retry/{manual_id}", response_model=ProcessManualResponse)
+async def retry_ingestion(
+    manual_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """
+    Retry ingestion for a failed manual.
+    """
+    # Get the manual
+    manual_doc = await db.manuals.find_one({"manual_id": manual_id})
+    if not manual_doc:
+        raise HTTPException(status_code=404, detail=f"Manual {manual_id} not found")
+    
+    # Manual status can be anything to allow forcing a retry, but typically it would be 'failed'
+    
+    # Reset status and clear error
+    await db.manuals.update_one(
+        {"manual_id": manual_id},
+        {"$set": {
+            "status": ManualStatus.PROCESSING.value,
+            "error": None
+        }}
+    )
+    
+    # Create new job record
+    job = IngestionJobDocument(manual_id=manual_id)
+    await db.ingestion_jobs.insert_one(document_to_dict(job))
+    
+    # Trigger task
+    app.send_task("ingest_manual", args=[manual_id])
+    
+    logger.info(f"Retry triggered for manual: {manual_id}")
+    
+    return ProcessManualResponse(
+        job_id=job.job_id,
+        manual_id=manual_id,
+        status="processing",
+        message="Retry started."
+    )
+
+
 @router.get("/status/{manual_id}", response_model=IngestionStatusResponse)
 async def get_ingestion_status(
     manual_id: str,

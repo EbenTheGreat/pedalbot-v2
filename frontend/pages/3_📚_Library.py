@@ -129,9 +129,15 @@ if manuals:
                     st.switch_page("pages/1_💬_Chat.py")
         
         with col3:
-            if status == "failed":
+            if status == "failed" or status == "pending":
                 if st.button("🔄 Retry", key=f"retry_{manual.get('manual_id')}"):
-                    st.info("Retry not implemented yet")
+                    try:
+                        with st.spinner("Starting retry..."):
+                            result = client.retry_ingestion(manual.get('manual_id'))
+                            st.success("Retry started!")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Retry failed: {e}")
 
 else:
     st.markdown("""

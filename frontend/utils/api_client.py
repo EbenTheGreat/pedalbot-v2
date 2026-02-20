@@ -204,6 +204,19 @@ class PedalBotClient:
         except Exception as e:
             print(f"Error fetching status: {e}")
             return None
+
+    def retry_ingestion(self, manual_id: str) -> Optional[Dict[str, Any]]:
+        """Retry ingestion for a failed manual."""
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.post(
+                    f"{self.base_url}/api/ingest/retry/{manual_id}"
+                )
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            print(f"Error retrying ingestion: {e}")
+            raise Exception(f"Retry failed: {str(e)}")
     
     def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
         """Get conversation history by ID."""
