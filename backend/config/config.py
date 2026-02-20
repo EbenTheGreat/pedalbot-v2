@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     "env_file_encoding": "utf-8",
     "case_sensitive": True,
     "validate_default": False,
+    "populate_by_name": True,
     "extra": "allow",  
 }
 
@@ -110,6 +111,7 @@ class Settings(BaseSettings):
         return None
 
     # REDIS (Cache + Rate Limiting)
+    REDIS_URL_ENV: Optional[str] = Field(None, alias="REDIS_URL")
     REDIS_URI: Optional[str] = None
     REDIS_TTL_SECONDS: int = 3600  # 1 hour cache
     REDIS_MAX_CONNECTIONS: int = 30
@@ -175,7 +177,7 @@ class Settings(BaseSettings):
         Get the MongoDB URI from environment or settings.
         """
         # Prioritize os.environ over pydantic field to ensure Railway vars win
-        uri = _os.environ.get("MONGODB_URI") or self.MONGODB_URI
+        uri = os.environ.get("MONGODB_URI") or self.MONGODB_URI
         return uri.strip() if uri else ""
     
     @property
@@ -188,13 +190,34 @@ class Settings(BaseSettings):
         """Check if running in development environment."""
         return self.ENV.lower() == "development"
     
+    @property
+    def redis_url(self) -> str:
+        """
+        Get the Redis connection URL with environment priority.
+        
+        Priority:
+        1. os.environ["REDIS_URL"] (Railway default)
+        2. os.environ["REDIS_URI"]
+        3. self.REDIS_URL_ENV
+        4. self.REDIS_URI
+        5. Default localhost
+        """
+        import os
+        # Prioritize os.environ directly to ensure Railway/Env vars win over .env cache
+        env_url = os.environ.get("REDIS_URL") or os.environ.get("REDIS_URI")
+        if env_url:
+            return env_url.strip()
+            
+        settings_url = self.REDIS_URL_ENV or self.REDIS_URI
+        return settings_url or "redis://localhost:6379/0"
+
     def get_celery_broker_url(self) -> Optional[str]:
         """Get Celery broker URL, defaulting to Redis if set."""
-        return self.CELERY_BROKER_URL or self.REDIS_URI or "redis://localhost:6379/0"
+        return self.CELERY_BROKER_URL or self.redis_url
     
     def get_celery_backend(self) -> Optional[str]:
         """Get Celery result backend, defaulting to Redis if set."""
-        return self.CELERY_RESULT_BACKEND or self.REDIS_URI or "redis://localhost:6379/1"
+        return self.CELERY_RESULT_BACKEND or self.redis_url
     
     @property
     def google_credentials_dict(self) -> Optional[Dict[str, Any]]:
@@ -218,8 +241,7 @@ def get_settings() -> Settings:
 
 
 # Debug: Check if env var is actually set before pydantic reads it
-import os as _os
-_mongo_env = _os.environ.get("MONGODB_URI")
+_mongo_env = os.environ.get("MONGODB_URI")
 if _mongo_env is None:
     _status = "MISSING (None)"
 elif len(_mongo_env.strip()) == 0:
@@ -228,7 +250,7 @@ else:
     _status = f"PRESENT ('{_mongo_env[:5]}...')"
 
 print(f"[ENV DEBUG] MONGODB_URI status: {_status} (len={len(_mongo_env) if _mongo_env else 0})")
-print(f"[ENV DEBUG] MONGO-related keys in os.environ: {[k for k in _os.environ.keys() if 'MONGO' in k]}")
+print(f"[ENV DEBUG] MONGO-related keys in os.environ: {[k for k in os.environ.keys() if 'MONGO' in k]}")
 
 # Singleton instance for convenience
 settings = get_settings()
