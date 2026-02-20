@@ -17,9 +17,15 @@ logger = logging.getLogger(__name__)
 
 
 # CELERY APP CONFIGURATION
+broker_url = settings.get_celery_broker_url()
+backend_url = settings.get_celery_backend()
+
+logger.info(f"Connecting to Celery broker: {broker_url.split('@')[-1] if broker_url and '@' in broker_url else broker_url}")
+logger.info(f"Connecting to Celery backend: {backend_url.split('@')[-1] if backend_url and '@' in backend_url else backend_url}")
+
 app = Celery("pedalbot",
-            broker=settings.get_celery_broker_url(),
-            backend=settings.get_celery_backend(),
+            broker=broker_url,
+            backend=backend_url,
             include=[
                 "backend.workers.ingest_worker",
                 "backend.workers.pricing_worker",

@@ -212,12 +212,35 @@ class Settings(BaseSettings):
         return settings_url or "redis://localhost:6379/0"
 
     def get_celery_broker_url(self) -> Optional[str]:
-        """Get Celery broker URL, defaulting to Redis if set."""
-        return self.CELERY_BROKER_URL or self.redis_url
+        """Get Celery broker URL with strict environment priority."""
+        import os
+        # Absolute priority: Railway's REDIS_URL
+        if os.environ.get("REDIS_URL"):
+            return os.environ["REDIS_URL"].strip()
+            
+        # Second priority: Explicit CELERY_BROKER_URL (if not localhost in production)
+        if self.CELERY_BROKER_URL:
+            # If we are in production but broker is localhost, ignore it and try redis_url
+            if self.is_production and "localhost" in self.CELERY_BROKER_URL:
+                return self.redis_url
+            return self.CELERY_BROKER_URL
+            
+        return self.redis_url
     
     def get_celery_backend(self) -> Optional[str]:
-        """Get Celery result backend, defaulting to Redis if set."""
-        return self.CELERY_RESULT_BACKEND or self.redis_url
+        """Get Celery result backend with strict environment priority."""
+        import os
+        # Absolute priority: Railway's REDIS_URL
+        if os.environ.get("REDIS_URL"):
+            return os.environ["REDIS_URL"].strip()
+            
+        # Second priority: Explicit CELERY_RESULT_BACKEND
+        if self.CELERY_RESULT_BACKEND:
+            if self.is_production and "localhost" in self.CELERY_RESULT_BACKEND:
+                return self.redis_url
+            return self.CELERY_RESULT_BACKEND
+            
+        return self.redis_url
     
     @property
     def google_credentials_dict(self) -> Optional[Dict[str, Any]]:
