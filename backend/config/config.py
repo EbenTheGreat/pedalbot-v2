@@ -232,24 +232,27 @@ class Settings(BaseSettings):
         import os
         # Prioritize os.environ directly to ensure Railway/Env vars win over .env cache
         env_url = os.environ.get("REDIS_URL") or os.environ.get("REDIS_URI")
-        if env_url:
+        if env_url and not env_url.startswith("${{"):
             return env_url.strip()
             
         settings_url = self.REDIS_URL_ENV or self.REDIS_URI
-        return settings_url or "redis://localhost:6379/0"
+        if settings_url and not str(settings_url).startswith("${{"):
+            return str(settings_url).strip()
+            
+        return "redis://localhost:6379/0"
 
     def get_celery_broker_url(self) -> Optional[str]:
         """Get Celery broker URL with strict environment priority."""
         import os
         
-        # 1. Explicit priority if provided and valid
-        if self.CELERY_BROKER_URL:
+        # 1. Explicit priority if provided and valid (not a template string)
+        if self.CELERY_BROKER_URL and not self.CELERY_BROKER_URL.startswith("${{"):
             if not (self.is_production and "localhost" in self.CELERY_BROKER_URL):
                 return self.CELERY_BROKER_URL
                 
         # 2. Environment (Railway/Render) priority
         env_redis = os.environ.get("REDIS_URL") or os.environ.get("REDIS_URI")
-        if env_redis:
+        if env_redis and not env_redis.startswith("${{"):
             return env_redis.strip()
             
         return self.redis_url
@@ -259,13 +262,13 @@ class Settings(BaseSettings):
         import os
         
         # 1. Explicit priority
-        if self.CELERY_RESULT_BACKEND:
+        if self.CELERY_RESULT_BACKEND and not self.CELERY_RESULT_BACKEND.startswith("${{"):
             if not (self.is_production and "localhost" in self.CELERY_RESULT_BACKEND):
                 return self.CELERY_RESULT_BACKEND
                 
         # 2. Environment priority
         env_redis = os.environ.get("REDIS_URL") or os.environ.get("REDIS_URI")
-        if env_redis:
+        if env_redis and not env_redis.startswith("${{"):
             return env_redis.strip()
             
         return self.redis_url

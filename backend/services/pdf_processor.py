@@ -145,7 +145,8 @@ class PdfProcessor:
     def process_pdf(self,
                     pdf_path: str,
                     pedal_name: str,
-                    force_ocr: bool = False) -> Tuple[list[PdfChunk] , Dict[str, Any]]:
+                    force_ocr: bool = False,
+                    progress_callback: Optional[Any] = None) -> Tuple[list[PdfChunk] , Dict[str, Any]]:
         """
         Process a PDF into chunks.
         
@@ -153,6 +154,7 @@ class PdfProcessor:
             pdf_path: Path to PDF file (local or URL)
             pedal_name: Name of the pedal (for context)
             force_ocr: Force OCR even if text extraction works
+            progress_callback: Optional async callback(current_page, total_pages)
         
         Returns:
             Tuple of (chunks, pdf_metadata)
@@ -168,7 +170,7 @@ class PdfProcessor:
             pdf_metadata = self._extract_pdf_metadata(doc, pedal_name)
 
             # Try standard text extraction first
-            full_text, page_map = self._extract_text_from_pdf(doc)
+            full_text, page_map = await self._extract_text_from_pdf(doc, progress_callback)
 
             # Calculate quality score
             quality_score = self._calculate_quality_score(full_text, pdf_metadata)
@@ -184,7 +186,7 @@ class PdfProcessor:
                     pdf_metadata["ocr_used"] = True
 
                     # Perform Hybrid OCR on all pages
-                    full_text, page_map = self._extract_text_hybrid(doc)
+                    full_text, page_map = await self._extract_text_hybrid(doc, progress_callback)
 
                     # Recalculate quality score
                     quality_score = self._calculate_quality_score(full_text, pdf_metadata)
@@ -232,18 +234,23 @@ class PdfProcessor:
             "file_size_byte": 0
         }
     
-    def _extract_text_from_pdf(self, doc: pymupdf.Document) -> Tuple[str, Dict[int, int]]:
+    async def _extract_text_from_pdf(self, doc: pymupdf.Document, progress_callback: Optional[Any] = None) -> Tuple[str, Dict[int, int]]:
         """
         Extract text from all pages using PyMuPDF.
         
         Returns:
             Tuple of (full_text, page_map) where page_map maps char position → page number
         """
-
+        total_pages = len(doc)
         full_text = ""
         page_map= {}  # Maps character position to page number
 
         for page_num, page in enumerate(doc.pages(), start=1):
+            if progress_callback:
+                try:
+                    await progress_callback(page_num, total_pages)
+                except Exception:
+                    pass
             # Extract text
             page_text = page.get_text("text")
 
@@ -262,7 +269,7 @@ class PdfProcessor:
         return full_text.strip(), page_map
 
 
-    def _extract_text_hybrid(self, doc: pymupdf.Document) -> Tuple[str, Dict[int, int]]:
+    async def _extract_text_hybrid(self, doc: pymupdf.Document, progress_callback: Optional[Any] = None) -> Tuple[str, Dict[int, int]]:
         """
         Extract text using a hybrid approach:
         1. Extract text layer via PyMuPDF (blocks with bounding boxes)
@@ -277,7 +284,7 @@ class PdfProcessor:
         
         if not self.vision_client:
             logger.warning("Vision client is None in _extract_text_hybrid - falling back to text extraction only")
-            return self._extract_text_from_pdf(doc)
+            return await self._extract_text_from_pdf(doc, progress_callback)
 
         full_text = ""
         page_map = {}
@@ -285,6 +292,11 @@ class PdfProcessor:
         logger.info(f"Starting hybrid extraction for {total_pages} pages")
 
         for page_num, page in enumerate(doc.pages(), start=1):
+            if progress_callback:
+                try:
+                    await progress_callback(page_num, total_pages)
+                except Exception:
+                    pass
             logger.info(f"Hybrid extraction on page {page_num}/{total_pages}")
             
             # 1. Get Text Layer via Words to reconstruct spaces properly (fixes 'smushed' text)

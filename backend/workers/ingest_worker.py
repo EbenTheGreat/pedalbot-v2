@@ -312,15 +312,26 @@ async def _process_manual_async(task: Task, manual_id: str) -> dict:
     # that PyMuPDF can't extract but OCR can
     force_ocr = processor.vision_client is not None
     
+    async def progress_callback(current, total):
+        # Scale page progress to 5% - 30% of total ingestion
+        progress = 5.0 + (current / total) * 25.0
+        await _update_job_status(
+            manual_id, 
+            "in_progress", 
+            progress=round(progress, 1),
+            message=f"Processing PDF: Page {current}/{total}"
+        )
+
     if force_ocr:
         logger.info("Force OCR enabled - pedal manuals often have diagram text that requires OCR")
     else:
         logger.warning("OCR disabled - diagram text may be missed. Consider adding Google Vision credentials.")
 
-    chunks, pdf_metadata = processor.process_pdf(
+    chunks, pdf_metadata = await processor.process_pdf(
         pdf_path=pdf_path,
         pedal_name=manual.pedal_name,
-        force_ocr=force_ocr  # Force OCR when available
+        force_ocr=force_ocr,  # Force OCR when available
+        progress_callback=progress_callback
     ) 
     
     # Log OCR diagnostic info

@@ -58,7 +58,7 @@ def _dispatch_ingestion(manual_id: str, background_tasks: BackgroundTasks):
         app.send_task("ingest_manual", args=[manual_id])
         logger.info(f"Dispatched ingestion via Celery for {manual_id}")
     except Exception as e:
-        logger.warning(f"Celery dispatch failed ({e}), falling back to inline processing")
+        logger.warning(f"Celery dispatch failed ({e}), falling back to inline processing", exc_info=True)
         background_tasks.add_task(_run_ingestion_inline, manual_id)
         logger.info(f"Dispatched ingestion inline for {manual_id}")
 
@@ -101,6 +101,7 @@ class IngestionStatusResponse(BaseModel):
     chunks_processed: int
     total_cunks: Optional[int]
     error: Optional[str]
+    message: Optional[str] = None
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
 
@@ -701,6 +702,7 @@ async def get_ingestion_status(
             chunks_processed=0,
             total_cunks=None,
             error=None,
+            message=None,
             started_at=None,
             completed_at=None
         )
@@ -714,6 +716,7 @@ async def get_ingestion_status(
         chunks_processed=job.chunks_processed,
         total_cunks=job.total_chunks,
         error=job.error,
+        message=getattr(job, "message", None),
         started_at=job.started_at,
         completed_at=job.completed_at
     )
