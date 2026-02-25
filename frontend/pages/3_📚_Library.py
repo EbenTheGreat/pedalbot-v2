@@ -96,7 +96,7 @@ if manuals:
         status = manual.get('status', 'unknown')
         badge_class = f"badge-{status}"
         
-        col1, col2, col3 = st.columns([3, 1, 1])
+        col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
         
         with col1:
             # Badge colors
@@ -138,6 +138,36 @@ if manuals:
                             st.rerun()
                     except Exception as e:
                         st.error(f"Retry failed: {e}")
+
+        with col4:
+            manual_id = manual.get('manual_id')
+            pedal_name = manual.get('pedal_name', 'Unknown')
+            
+            # Use session state to track which manual is being deleted
+            confirm_key = f"confirm_delete_{manual_id}"
+            
+            if st.session_state.get(confirm_key, False):
+                # Show confirm/cancel buttons
+                st.markdown(f"<div style='font-size: 12px; color: #ef4444; font-weight: 600;'>Delete {pedal_name}?</div>", unsafe_allow_html=True)
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("✅", key=f"yes_{manual_id}", help="Confirm delete"):
+                        try:
+                            with st.spinner("Deleting..."):
+                                client.delete_manual(manual_id)
+                                st.session_state[confirm_key] = False
+                                st.success(f"Deleted {pedal_name}!")
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"Delete failed: {e}")
+                with c2:
+                    if st.button("❌", key=f"no_{manual_id}", help="Cancel"):
+                        st.session_state[confirm_key] = False
+                        st.rerun()
+            else:
+                if st.button("🗑️", key=f"delete_{manual_id}", help=f"Delete {pedal_name}"):
+                    st.session_state[confirm_key] = True
+                    st.rerun()
 
 else:
     st.markdown("""

@@ -96,6 +96,13 @@ class ListManualsResponse(BaseModel):
     total: int
 
 
+class DeleteManualResponse(BaseModel):
+    """Response after deleting a manual"""
+    manual_id: str
+    pedal_name: str
+    message: str
+
+
 # HELPER FUNCTIONS
 def _extract_manufacturer_from_filename(filename: str) -> Optional[str]:
     """
@@ -725,3 +732,65 @@ async def list_manuals(
         total=len(manuals)
     )
 
+
+@router.delete("/{manual_id}", response_model=DeleteManualResponse)
+async def delete_manual(
+    manual_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Delete a manual and all associated data.
+
+    Removes:
+    1. Vectors from Pinecone (namespace)
+    2. Manual document from MongoDB
+    3. Ingestion job records from MongoDB
+    4. Uploaded PDF file from disk
+    """
+    # Get manual
+    manual_doc = await db.manuals.find_one({"manual_id": manual_id})
+    if not manual_doc:
+        raise HTTPException(status_code=404, detail=f"Manual {manual_id} not found")
+
+    manual = dict_to_document(manual_doc, ManualDocument)
+    pedal_name = manual.pedal_name
+    namespace = manual.pinecone_namespace
+
+    # 1. Delete vectors from Pinecone
+    try:
+        pinecone_client = PineconeClient(
+            api_key=settings.PINECONE_API_KEY,
+            index_name=settings.PINECONE_INDEX_NAME,
+        )
+        pinecone_client.delete_namespace(namespace)
+        logger.info(f"Deleted Pinecone namespace: {namespace}")
+    except Exception as e:
+        # Log but don't block MongoDB cleanup
+        logger.warning(f"Failed to delete Pinecone namespace '{namespace}': {e}")
+
+    # 2. Delete manual from MongoDB
+    await db.manuals.delete_one({"manual_id": manual_id})
+    logger.info(f"Deleted manual from MongoDB: {manual_id}")
+
+    # 3. Delete associated ingestion jobs
+    result = await db.ingestion_jobs.delete_many({"manual_id": manual_id})
+    logger.info(f"Deleted {result.deleted_count} ingestion jobs for manual: {manual_id}")
+
+    # 4. Delete uploaded PDF file (if it exists)
+    if manual.pdf_url:
+        import os
+        pdf_path = os.path.join(settings.uploads_path, manual.pdf_url)
+        if os.path.exists(pdf_path):
+            try:
+                os.remove(pdf_path)
+                logger.info(f"Deleted PDF file: {pdf_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete PDF file '{pdf_path}': {e}")
+
+    logger.info(f"Manual fully deleted: {manual_id} ({pedal_name})")
+
+    return DeleteManualResponse(
+        manual_id=manual_id,
+        pedal_name=pedal_name,
+        message=f"Manual '{pedal_name}' deleted successfully from Pinecone and MongoDB.",
+    )

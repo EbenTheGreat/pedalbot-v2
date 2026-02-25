@@ -217,6 +217,24 @@ class PedalBotClient:
         except Exception as e:
             print(f"Error retrying ingestion: {e}")
             raise Exception(f"Retry failed: {str(e)}")
+
+    def delete_manual(self, manual_id: str) -> Optional[Dict[str, Any]]:
+        """Delete a manual and all associated data (Pinecone + MongoDB)."""
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.delete(
+                    f"{self.base_url}/api/ingest/{manual_id}"
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as e:
+            try:
+                error_data = e.response.json()
+                raise Exception(error_data.get("detail", str(e)))
+            except Exception:
+                raise Exception(f"Delete failed: {e.response.status_code}")
+        except Exception as e:
+            raise Exception(f"Delete failed: {str(e)}")
     
     def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
         """Get conversation history by ID."""
