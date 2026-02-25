@@ -142,7 +142,7 @@ class PdfProcessor:
             except Exception as e:
                 logger.warning(f"Failed to initialize Google Vision API with Api key: {e}. OCR disabled")
 
-    def process_pdf(self,
+    async def process_pdf(self,
                     pdf_path: str,
                     pedal_name: str,
                     force_ocr: bool = False,
