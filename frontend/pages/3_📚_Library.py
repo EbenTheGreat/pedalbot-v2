@@ -98,6 +98,18 @@ if manuals:
         
         col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
         
+        # If processing, fetch detailed status for progress message
+        job_message = None
+        current_progress = 0.0
+        if status == "processing":
+            try:
+                job_status = client.get_ingestion_status(manual.get('manual_id'))
+                if job_status:
+                    job_message = job_status.get('message')
+                    current_progress = job_status.get('progress', 0.0)
+            except Exception:
+                pass
+        
         with col1:
             # Badge colors
             badge_colors = {
@@ -118,6 +130,7 @@ if manuals:
                     <span style="background: {badge_color}20; color: {badge_color}; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">{status.upper()}</span>
                     · {manual.get('chunk_count', 0)} chunks
                     · ID: {manual.get('manual_id', 'N/A')[:12]}...
+                    {f'<div style="color: #3b82f6; margin-top: 4px; font-size: 11px; font-weight: 500;">{job_message}</div>' if job_message else ""}
                 </div>
             </div>
             """, unsafe_allow_html=True)

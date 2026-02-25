@@ -68,6 +68,9 @@ class MongoDB:
                     maxPoolSize=max_pool_size,
                     minPoolSize=min_pool_size,
                     serverSelectionTimeoutMS=server_selection_timeout_ms,
+                    connectTimeoutMS=10000,      # 10s connection timeout
+                    socketTimeoutMS=45000,       # 45s socket timeout
+                    maxIdleTimeMS=10000,         # Close idle connections after 10s to avoid stale TCP
                     retryWrites=True,
                     retryReads=True,
                 )
@@ -78,6 +81,9 @@ class MongoDB:
                     maxPoolSize=max_pool_size,
                     minPoolSize=min_pool_size,
                     serverSelectionTimeoutMS=server_selection_timeout_ms,
+                    connectTimeoutMS=10000,
+                    socketTimeoutMS=45000,
+                    maxIdleTimeMS=10000,         # CRITICAL for Railway/Atlas stability
                     retryWrites=True,
                     retryReads=True,
                     tls=True,
