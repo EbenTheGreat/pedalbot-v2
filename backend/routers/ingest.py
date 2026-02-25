@@ -124,6 +124,19 @@ class ListManualsResponse(BaseModel):
     total: int
 
 
+class WorkerInfo(BaseModel):
+    """Information about a Celery worker"""
+    name: str
+    status: str
+    active_tasks: int
+    reserved_tasks: int
+
+class CeleryStatsResponse(BaseModel):
+    """Celery cluster statistics"""
+    online: bool
+    workers: list[WorkerInfo]
+    broker: str
+
 class DeleteManualResponse(BaseModel):
     """Response after deleting a manual"""
     manual_id: str
@@ -821,6 +834,51 @@ async def delete_manual(
 
     return DeleteManualResponse(
         manual_id=manual_id,
-        pedal_name=pedal_name,
-        message=f"Manual '{pedal_name}' deleted successfully from Pinecone and MongoDB.",
+        status="deleted",
+        message=f"Manual {manual_id} and associated data deleted."
     )
+
+
+
+@router.get("/celery-stats", response_model=CeleryStatsResponse)
+async def get_celery_stats():
+    """Get statistics about the Celery cluster."""
+    try:
+        from backend.workers.celery_app import app
+        
+        # Check broker connection
+        broker_url = settings.get_celery_broker_url()
+        broker_display = broker_url.split('@')[-1] if broker_url and '@' in broker_url else "localhost"
+        
+        # Inspection
+        inspector = app.control.inspect(timeout=1.0)
+        
+        # Ping workers
+        try:
+            pings = inspector.ping() or {}
+        except Exception:
+            pings = {}
+            
+        workers = []
+        if pings:
+            # Get active/reserved tasks
+            active = inspector.active() or {}
+            reserved = inspector.reserved() or {}
+            
+            for worker_name in pings.keys():
+                workers.append(WorkerInfo(
+                    name=worker_name,
+                    status="online",
+                    active_tasks=len(active.get(worker_name, [])),
+                    reserved_tasks=len(reserved.get(worker_name, []))
+                ))
+        
+        return CeleryStatsResponse(
+            online=len(workers) > 0,
+            workers=workers,
+            broker=broker_display
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to get Celery stats: {e}")
+        return CeleryStatsResponse(online=False, workers=[], broker="unknown")

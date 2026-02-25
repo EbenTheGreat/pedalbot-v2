@@ -54,8 +54,22 @@ with st.sidebar:
     
     # API Status
     is_healthy = client.health_check()
-    status = "🟢 Online" if is_healthy else "🔴 Offline"
-    st.caption(f"API: {status}")
+    api_status = "🟢 Online" if is_healthy else "🔴 Offline"
+    st.caption(f"API: {api_status}")
+    
+    # Celery Status
+    try:
+        celery_stats = client.get_celery_stats()
+        if celery_stats and celery_stats.get("online"):
+            workers = celery_stats.get("workers", [])
+            active = sum(w.get("active_tasks", 0) for w in workers)
+            st.caption(f"Worker: 🟢 Online ({len(workers)})")
+            if active > 0:
+                st.caption(f"Tasks: ⏳ {active} active")
+        else:
+            st.caption("Worker: 🔴 Offline")
+    except Exception:
+        st.caption("Worker: ⚪ Unknown")
 
 
 # ============ MAIN CONTENT ============
@@ -98,6 +112,16 @@ if manuals:
         
         col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
         
+        # Extra status info for processing manuals
+        job_message = None
+        if status == "processing":
+            try:
+                job_status = client.get_ingestion_status(manual.get('manual_id'))
+                if job_status:
+                    job_message = job_status.get('message')
+            except Exception:
+                pass
+        
         with col1:
             # Badge colors
             badge_colors = {
@@ -121,6 +145,9 @@ if manuals:
                 </div>
             </div>
             """, unsafe_allow_html=True)
+            
+            if job_message:
+                st.info(f"ℹ️ {job_message}", icon=None)
         
         with col2:
             if status == "completed":

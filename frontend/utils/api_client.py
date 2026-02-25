@@ -252,6 +252,18 @@ class PedalBotClient:
         except Exception as e:
             print(f"Error fetching conversation: {e}")
             return None
+    def get_celery_stats(self) -> Optional[Dict[str, Any]]:
+        """Get Celery worker health and statistics."""
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.get(
+                    f"{self.base_url}/api/ingest/celery-stats"
+                )
+                response.raise_for_status()
+                return response.json()
+        except Exception as e:
+            print(f"Error fetching Celery stats: {e}")
+            return None
 
 
 # Singleton instance
