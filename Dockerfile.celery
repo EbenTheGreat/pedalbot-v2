@@ -31,4 +31,4 @@ ENV PYTHONUNBUFFERED=1
 ENV ENV=production
 
 # Default command (can be overridden in docker-compose)
-CMD ["celery", "-A", "backend.workers.celery_app", "worker", "--loglevel=info"]
+CMD ["celery", "-A", "backend.workers.celery_app", "worker", "-Q", "default,ingestion,pricing,notifications", "--loglevel=info"]
