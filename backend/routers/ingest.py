@@ -37,6 +37,33 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ingest", tags=["ingestion"])
 
 
+async def _run_ingestion_inline(manual_id: str):
+    """Run ingestion directly in-process (fallback when Celery/Redis is unavailable)."""
+    from backend.workers.ingest_worker import _process_manual_async, _update_job_status
+    from backend.db.mongodb import MongoDB
+    try:
+        result = await _process_manual_async(None, manual_id)
+        logger.info(f"Inline ingestion completed for {manual_id}: {result.get('status')}")
+    except Exception as e:
+        logger.error(f"Inline ingestion failed for {manual_id}: {e}", exc_info=True)
+        try:
+            await _update_job_status(manual_id=manual_id, status="failed", error=str(e))
+        except Exception:
+            pass
+
+
+def _dispatch_ingestion(manual_id: str, background_tasks: BackgroundTasks):
+    """Try Celery first; if Redis is down, fall back to inline background task."""
+    try:
+        app.send_task("ingest_manual", args=[manual_id])
+        logger.info(f"Dispatched ingestion via Celery for {manual_id}")
+    except Exception as e:
+        logger.warning(f"Celery dispatch failed ({e}), falling back to inline processing")
+        background_tasks.add_task(_run_ingestion_inline, manual_id)
+        logger.info(f"Dispatched ingestion inline for {manual_id}")
+
+
+
 # REQUEST/RESPONSE MODELS
 class UploadManualRequest(BaseModel):
     """Request to upload a manual."""
@@ -450,6 +477,7 @@ def _extract_pedal_name_from_filename(filename: str) -> str:
 async def upload_manual(
     pdf_file: UploadFile = File(..., description="PDF manual file"),
     db: AsyncIOMotorDatabase = Depends(get_database),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     """
     Upload a pedal manual PDF.
@@ -527,8 +555,8 @@ async def upload_manual(
         # Insert to MongoDB
         await db.manuals.insert_one(document_to_dict(manual))
 
-        # Automatically trigger processing
-        app.send_task("ingest_manual", args=[manual.manual_id])
+        # Automatically trigger processing (Celery → inline fallback)
+        _dispatch_ingestion(manual.manual_id, background_tasks)
 
         logger.info(f"Manual created and processing started: {manual.manual_id} ({pedal_name})")
 
@@ -549,7 +577,8 @@ async def upload_manual(
 
 @router.post("/process", response_model=ProcessManualResponse)
 async def process_manual(manual_id: str,
-                        db: AsyncIOMotorDatabase= Depends(get_database)):
+                        db: AsyncIOMotorDatabase= Depends(get_database),
+                        background_tasks: BackgroundTasks = BackgroundTasks()):
     """
     Start processing a manual (PDF → chunks → Pinecone).
     
@@ -584,11 +613,8 @@ async def process_manual(manual_id: str,
         {"$set": {"status": ManualStatus.PROCESSING.value}}
     )
 
-    # Trigger Background Tasks
-    app.send_task(
-    "ingest_manual",
-    args=[manual_id]
-    )
+    # Trigger Background Tasks (Celery → inline fallback)
+    _dispatch_ingestion(manual_id, background_tasks)
 
     logger.info(f"Processing started: {manual_id} (job: {job.job_id})")
     
@@ -603,7 +629,8 @@ async def process_manual(manual_id: str,
 @router.post("/retry/{manual_id}", response_model=ProcessManualResponse)
 async def retry_ingestion(
     manual_id: str,
-    db: AsyncIOMotorDatabase = Depends(get_database)
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    background_tasks: BackgroundTasks = BackgroundTasks()
 ):
     """
     Retry ingestion for a failed manual.
@@ -628,8 +655,8 @@ async def retry_ingestion(
     job = IngestionJobDocument(manual_id=manual_id)
     await db.ingestion_jobs.insert_one(document_to_dict(job))
     
-    # Trigger task
-    app.send_task("ingest_manual", args=[manual_id])
+    # Trigger task (Celery → inline fallback)
+    _dispatch_ingestion(manual_id, background_tasks)
     
     logger.info(f"Retry triggered for manual: {manual_id}")
     
