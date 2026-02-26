@@ -116,6 +116,7 @@ class ManualListItem(BaseModel):
     file_size_bytes: Optional[int]
     uploaded_at: datetime
     indexed_at: Optional[datetime]
+    error: Optional[str] = None
 
 
 class ListManualsResponse(BaseModel):
@@ -767,7 +768,8 @@ async def list_manuals(
             chunk_count=manual.chunk_count,
             file_size_bytes=manual.file_size_bytes,
             uploaded_at=manual.uploaded_at,
-            indexed_at=manual.indexed_at
+            indexed_at=manual.indexed_at,
+            error=manual.error
         ))
     
     return ListManualsResponse(

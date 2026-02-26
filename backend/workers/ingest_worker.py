@@ -247,6 +247,17 @@ async def _process_manual_async(task: Task, manual_id: str) -> dict:
     
     logger.info(f"PDF path resolved to: {pdf_path}")
 
+    # CRITICAL: Check if file exists (Railway Volume check)
+    if not os.path.exists(pdf_path):
+        error_msg = f"PDF file not found at {pdf_path}. Check if Railway Volume 'pedalbot-uploads' is mounted correctly to both API and Worker."
+        logger.error(error_msg)
+        await _update_job_status(manual_id, "failed", error=error_msg)
+        await db.manuals.update_one(
+            {"manual_id": manual_id},
+            {"$set": {"status": "failed", "error": error_msg}}
+        )
+        return {"manual_id": manual_id, "status": "failed", "error": error_msg}
+
     # Step 1: Process PDF (30% progress)
     logger.info(f"Initializing PDF processor with OCR threshold: {settings.OCR_QUALITY_THRESHOLD}")
     
@@ -317,11 +328,13 @@ async def _process_manual_async(task: Task, manual_id: str) -> dict:
     async def progress_callback(current, total):
         # Scale page progress to 5% - 30% of total ingestion
         progress = 5.0 + (current / total) * 25.0
+        msg = f"Processing PDF: Page {current}/{total}"
+        logger.info(f"Heartbeat [{manual_id}]: {msg}")
         await _update_job_status(
             manual_id, 
             "in_progress", 
             progress=round(progress, 1),
-            message=f"Processing PDF: Page {current}/{total}"
+            message=msg
         )
 
     if force_ocr:

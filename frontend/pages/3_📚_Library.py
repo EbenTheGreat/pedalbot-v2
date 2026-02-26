@@ -142,6 +142,7 @@ if manuals:
                     <span style="background: {badge_color}20; color: {badge_color}; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">{status.upper()}</span>
                     · {manual.get('chunk_count', 0)} chunks
                     · ID: {manual.get('manual_id', 'N/A')[:12]}...
+                    {f'<div style="color: #ef4444; margin-top: 4px; font-size: 11px;">{manual.get("error")}</div>' if status == "failed" and manual.get("error") else ''}
                 </div>
             </div>
             """, unsafe_allow_html=True)
