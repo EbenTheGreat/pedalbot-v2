@@ -33,6 +33,8 @@ app = Celery("pedalbot",
             ]
             )
 
+print(f"DEBUG: Celery App initialized with broker: {broker_url[:15]}...")
+
 # Configuration
 app.conf.update(
     # Task routing

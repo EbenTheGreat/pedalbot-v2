@@ -70,7 +70,7 @@ class EmbeddingService:
         """
         self.client= Client(api_key= api_key,
                             max_retries=max_retries,
-                            timeout=None
+                            timeout=60 # 60s timeout for safety
                             )
         self.model= model
         self.batch_size= batch_size

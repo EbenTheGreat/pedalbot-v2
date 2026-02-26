@@ -57,8 +57,8 @@ class Settings(BaseSettings):
     # DATABASE - MongoDB
     MONGODB_URI: str = Field(default="")
     MONGODB_DB_NAME: str = "pedalbot_db"
-    MONGODB_MAX_POOL_SIZE: int = 30
-    MONGODB_MIN_POOL_SIZE: int = 5
+    MONGODB_MAX_POOL_SIZE: int = 15
+    MONGODB_MIN_POOL_SIZE: int = 1
 
     # VECTOR DATABASE - Pinecone
     PINECONE_API_KEY: str = Field(default="", alias="PINECONE_API_KEY")

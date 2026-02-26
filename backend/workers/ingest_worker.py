@@ -16,6 +16,8 @@ from backend.config.config import settings
 
 logger = logging.getLogger(__name__)
 
+print("DEBUG: Ingest Worker module BOOTING...")
+
 
 # HELPER FUNCTIONS
 def _extract_manufacturer_from_pdf(chunks, pdf_metadata) -> Optional[str]:
