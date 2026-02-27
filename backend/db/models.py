@@ -120,6 +120,9 @@ class ManualDocument(BaseModel):
     uploaded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     indexed_at: Optional[datetime] = None
 
+    # Error tracking
+    error: Optional[str] = None  # Error message if ingestion failed
+
     # Quality flags
     ocr_required: bool = False
     quality_score: Optional[float] = None  # 0-1, based on text extraction
