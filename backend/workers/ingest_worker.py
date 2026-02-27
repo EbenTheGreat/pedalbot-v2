@@ -129,8 +129,8 @@ def _compute_canonical_name(pedal_name: str, manufacturer: Optional[str]) -> str
     # Normalize whitespace
     cleaned = ' '.join(cleaned.split()).strip()
     
-    # Fix model number formatting (GT1 → GT-1)
-    cleaned = re.sub(r'([A-Za-z]+)(\d+)', r'\1-\2', cleaned)
+    # Fix model number formatting (GT1 → GT-1) but preserve trailing letters (G3n stays G3n)
+    cleaned = re.sub(r'([A-Za-z]+)(\d+)(?![A-Za-z])', r'\1-\2', cleaned)
     
     # Remove double hyphens that might result
     cleaned = re.sub(r'-+', '-', cleaned)

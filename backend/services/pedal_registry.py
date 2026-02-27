@@ -3,6 +3,8 @@ Pedal Registry Service: Resolves user-facing pedal names to system namespaces.
 
 This is the missing architectural layer that decouples:
 - User input (flexible, fuzzy): "Helix", "helix", "Line 6 Helix"
+
+Cache refreshes automatically every 60s so newly ingested pedals are discoverable.
 - System namespace (rigid, exact): "manual_helix_3.80_owner's_manual___english"
 
 Design Principles:
@@ -16,6 +18,7 @@ from dataclasses import dataclass
 from enum import Enum
 import logging
 import re
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +74,8 @@ class PedalRegistry:
         self._cache: Dict[str, PedalInfo] = {}  # Map normalized name → Info
         self._all_pedals: List[Dict[str, Any]] = []
         self._loaded = False
+        self._last_loaded_at: float = 0  # epoch timestamp
+        self._cache_ttl: float = 60.0    # refresh from MongoDB every 60s
     
     async def load_from_db(self) -> None:
         """Load all pedals from MongoDB into cache."""
@@ -119,7 +124,8 @@ class PedalRegistry:
                         self._cache[alias_normalized] = info
             
             self._loaded = True
-            logger.info(f"PedalRegistry loaded {len(manuals)} pedals")
+            self._last_loaded_at = time.time()
+            logger.info(f"PedalRegistry loaded {len(manuals)} pedals (TTL={self._cache_ttl}s)")
             
         except Exception as e:
             logger.error(f"Failed to load pedal registry: {e}")
@@ -136,6 +142,9 @@ class PedalRegistry:
             PedalInfo if found, None otherwise
         """
         if not self._loaded:
+            await self.load_from_db()
+        elif self._is_cache_stale():
+            logger.info("PedalRegistry cache stale, reloading...")
             await self.load_from_db()
         
         if not user_input:
@@ -189,6 +198,9 @@ class PedalRegistry:
         """List all available pedals."""
         if not self._loaded:
             await self.load_from_db()
+        elif self._is_cache_stale():
+            logger.info("PedalRegistry cache stale, reloading...")
+            await self.load_from_db()
         
         # Return unique pedals (not aliases)
         seen = set()
@@ -199,6 +211,10 @@ class PedalRegistry:
                 result.append(info)
         return result
     
+    def _is_cache_stale(self) -> bool:
+        """Check if cache needs refresh."""
+        return (time.time() - self._last_loaded_at) > self._cache_ttl
+
     def _normalize(self, name: str) -> str:
         """
         Normalize pedal name for matching.
