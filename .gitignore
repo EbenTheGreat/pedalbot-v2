@@ -60,5 +60,43 @@ nul
 !package-lock.json
 !tsconfig.json
 
-# Lock files (optional - some prefer to commit these)
-# uv.lock
+# Lock files
+uv.lock
+
+# Documentation files (keep locally, not on GitHub)
+docs/
+API_QUICK_REFERENCE.md
+CLEAR_DATABASES.md
+DEPLOYMENT.md
+FASTAPI_TESTING_GUIDE.md
+GET_MONGODB_HOSTS.md
+IDENTITY_RESOLUTION_FIX.md
+MANUAL_DOWNLOAD_GUIDE.md
+MANUFACTURER_EXTRACTION_COMPLETE.md
+MONGODB_FIX_GUIDE.md
+MONGODB_TROUBLESHOOTING.md
+PROJECT_OVERVIEW.md
+PedalBot_Codebase_DeepDive.md
+Pedalbot_Architecture_Explained_by_Ebenezer.md
+RAILWAY_DEPLOYMENT.md
+README_DOCKER.md
+STREAMLIT_COMMANDS.md
+TESTING_GUIDE.md
+TEST_SUMMARY.md
+UI_ENHANCEMENTS.md
+
+# Test scripts and utilities (keep locally)
+tests/
+backend/test/
+backend/scripts/
+check_manuals.py
+test_*.py
+test_*.sh
+verify_*.py
+
+# Shell/batch convenience scripts
+start-docker.bat
+start-docker.sh
+
+# Agent config
+.agent/
