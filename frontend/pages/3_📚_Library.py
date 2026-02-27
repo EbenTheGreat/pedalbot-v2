@@ -133,19 +133,21 @@ if manuals:
             }
             badge_color = badge_colors.get(status, badge_colors['unknown'])
             
-            st.markdown(f"""
-            <div class="card">
-                <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">
-                    {manual.get('pedal_name', 'Unknown')}
-                </div>
-                <div style="font-size: 13px; color: #94a3b8;">
-                    <span style="background: {badge_color}20; color: {badge_color}; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">{status.upper()}</span>
-                    · {manual.get('chunk_count', 0)} chunks
-                    · ID: {manual.get('manual_id', 'N/A')[:12]}...
-                    {f'<div style="color: #ef4444; margin-top: 4px; font-size: 11px;">{manual.get("error")}</div>' if status == "failed" and manual.get("error") else ''}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            pedal_name = manual.get('pedal_name', 'Unknown')
+            chunk_count = manual.get('chunk_count', 0)
+            manual_id_short = manual.get('manual_id', 'N/A')[:12]
+            error_html = f' · <span style="color: #ef4444; font-size: 11px;">{manual.get("error")}</span>' if status == "failed" and manual.get("error") else ''
+            
+            st.markdown(
+                f'<p style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">{pedal_name}</p>'
+                f'<p style="font-size: 13px; color: #94a3b8; margin: 0;">'
+                f'<span style="background: {badge_color}20; color: {badge_color}; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">{status.upper()}</span>'
+                f' · {chunk_count} chunks'
+                f' · ID: {manual_id_short}...'
+                f'{error_html}'
+                f'</p>',
+                unsafe_allow_html=True
+            )
             
             if job_message:
                 st.info(f"ℹ️ {job_message}", icon=None)
