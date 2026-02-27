@@ -30,6 +30,12 @@ Deploy PedalBot with **Railway** (backend + Celery worker + Redis) and **Streaml
    - **Custom Dockerfile path**: `Dockerfile.celery`
    - **Custom start command**: `celery -A backend.workers.celery_app worker --loglevel=info --concurrency=2 -Q default,ingestion,pricing,notifications`
 
+> [!IMPORTANT]
+> Make sure the worker uses `Dockerfile.celery`, **not** the default `Dockerfile`. If the worker logs show "Uvicorn running...", the wrong Dockerfile is being used.
+
+> [!NOTE]
+> No shared volume is needed between the API and worker. Uploaded PDFs are stored in MongoDB GridFS, so both services can access them through the shared MongoDB connection.
+
 ---
 
 ## Step 4: Set Environment Variables

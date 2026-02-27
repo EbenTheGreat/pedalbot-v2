@@ -31,6 +31,7 @@ from backend.services.pdf_processor import PdfProcessor, validate_pdf, get_pdf_f
 from backend.services.embeddings import EmbeddingService
 from backend.services.pinecone_client import PineconeClient
 from backend.config.config import settings
+from backend.services.gridfs_storage import GridFSStorage
 
 logger = logging.getLogger(__name__)
 
@@ -546,7 +547,14 @@ async def upload_manual(
         async with aiofiles.open(local_pdf_path, 'wb') as f:
             await f.write(content)
         
-        logger.info(f"Uploaded PDF: {filename} ({file_size} bytes) to {local_pdf_path}")
+        logger.info(f"Uploaded PDF to disk: {filename} ({file_size} bytes) to {local_pdf_path}")
+        
+        # Also upload to GridFS (enables Railway cross-service access)
+        try:
+            gridfs_id = await GridFSStorage.upload_pdf(db, filename, content, manual_id="pending")
+            logger.info(f"Uploaded PDF to GridFS: {filename} (gridfs_id={gridfs_id})")
+        except Exception as e:
+            logger.warning(f"GridFS upload failed (will rely on filesystem): {e}")
         
         # IMPORTANT: Store only the filename in MongoDB, not full path!
         # The worker will construct the correct path based on its environment
@@ -566,6 +574,16 @@ async def upload_manual(
             status=ManualStatus.PENDING,
             file_size_bytes=file_size,
         )
+        
+        # Update GridFS metadata with the real manual_id
+        try:
+            files_coll = db["pdfs.files"]
+            await files_coll.update_one(
+                {"metadata.manual_id": "pending", "filename": filename},
+                {"$set": {"metadata.manual_id": manual.manual_id}}
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update GridFS metadata: {e}")
 
         # Insert to MongoDB
         await db.manuals.insert_one(document_to_dict(manual))
@@ -821,7 +839,7 @@ async def delete_manual(
     result = await db.ingestion_jobs.delete_many({"manual_id": manual_id})
     logger.info(f"Deleted {result.deleted_count} ingestion jobs for manual: {manual_id}")
 
-    # 4. Delete uploaded PDF file (if it exists)
+    # 4. Delete uploaded PDF file (filesystem + GridFS)
     if manual.pdf_url:
         import os
         pdf_path = os.path.join(settings.uploads_path, manual.pdf_url)
@@ -831,6 +849,12 @@ async def delete_manual(
                 logger.info(f"Deleted PDF file: {pdf_path}")
             except Exception as e:
                 logger.warning(f"Failed to delete PDF file '{pdf_path}': {e}")
+    
+    # 5. Delete PDF from GridFS
+    try:
+        await GridFSStorage.delete_pdf(db, manual_id)
+    except Exception as e:
+        logger.warning(f"Failed to delete PDF from GridFS: {e}")
 
     logger.info(f"Manual fully deleted: {manual_id} ({pedal_name})")
 

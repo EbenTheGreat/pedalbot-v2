@@ -235,7 +235,9 @@ async def _process_manual_async(task: Task, manual_id: str) -> dict:
     # pdf_url now contains just the filename (e.g., "nux_mg-30_user_manual.pdf")
     # We construct the full path using the environment-aware uploads_path
     import os
+    import tempfile
     pdf_filename = manual.pdf_url
+    temp_pdf_path = None  # Track temp files for cleanup
     
     # Backwards compatibility: if pdf_url is a full path (legacy), extract just the filename
     if "/" in pdf_filename or "\\" in pdf_filename:
@@ -247,16 +249,29 @@ async def _process_manual_async(task: Task, manual_id: str) -> dict:
     
     logger.info(f"PDF path resolved to: {pdf_path}")
 
-    # CRITICAL: Check if file exists (Railway Volume check)
+    # Try local filesystem first, then fall back to GridFS (Railway cross-service)
     if not os.path.exists(pdf_path):
-        error_msg = f"PDF file not found at {pdf_path}. Check if Railway Volume 'pedalbot-uploads' is mounted correctly to both API and Worker."
-        logger.error(error_msg)
-        await _update_job_status(manual_id, "failed", error=error_msg)
-        await db.manuals.update_one(
-            {"manual_id": manual_id},
-            {"$set": {"status": "failed", "error": error_msg}}
-        )
-        return {"manual_id": manual_id, "status": "failed", "error": error_msg}
+        logger.info(f"PDF not on local disk, trying GridFS download...")
+        from backend.services.gridfs_storage import GridFSStorage
+        
+        result = await GridFSStorage.download_pdf(db, manual_id)
+        if result:
+            filename, data = result
+            # Write to a temp file for processing
+            temp_fd, temp_pdf_path = tempfile.mkstemp(suffix=".pdf")
+            with os.fdopen(temp_fd, "wb") as f:
+                f.write(data)
+            pdf_path = temp_pdf_path
+            logger.info(f"Downloaded PDF from GridFS to temp: {pdf_path} ({len(data)} bytes)")
+        else:
+            error_msg = f"PDF file not found on disk ({pdf_path}) or in GridFS (manual_id={manual_id})."
+            logger.error(error_msg)
+            await _update_job_status(manual_id, "failed", error=error_msg)
+            await db.manuals.update_one(
+                {"manual_id": manual_id},
+                {"$set": {"status": "failed", "error": error_msg}}
+            )
+            return {"manual_id": manual_id, "status": "failed", "error": error_msg}
 
     # Step 1: Process PDF (30% progress)
     logger.info(f"Initializing PDF processor with OCR threshold: {settings.OCR_QUALITY_THRESHOLD}")
@@ -486,6 +501,14 @@ async def _process_manual_async(task: Task, manual_id: str) -> dict:
     )
 
     logger.info(f"Ingestion completed: {manual.pedal_name}")
+    
+    # Clean up temp file (downloaded from GridFS)
+    if temp_pdf_path and os.path.exists(temp_pdf_path):
+        try:
+            os.remove(temp_pdf_path)
+            logger.info(f"Cleaned up temp PDF: {temp_pdf_path}")
+        except Exception as e:
+            logger.warning(f"Failed to clean up temp PDF: {e}")
     
     return {
         "manual_id": manual_id,
